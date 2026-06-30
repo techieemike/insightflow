@@ -1,0 +1,8 @@
+node_modules
+dist
+.next
+.env
+.env.local
+*.xlsx
+apps/api/dist
+apps/web/.next
