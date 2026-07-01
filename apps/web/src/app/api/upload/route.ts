@@ -5,6 +5,7 @@ import { validateFile } from '@/lib/file-validator';
 import { parseFile, parseDocument, detectDuplicates, detectEmptyRows } from '@/lib/file-parser';
 import { analyzeQuality } from '@/lib/quality';
 import { generateInsights } from '@/lib/insights';
+import { chunkText, generateEmbeddings } from '@/lib/embeddings';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -76,6 +77,21 @@ export async function POST(request: Request) {
         where: { id: dataset.id },
         data: { status: 'READY', processedAt: new Date() },
       });
+
+      try {
+        const chunks = chunkText(content);
+        if (chunks.length > 0) {
+          const embeddings = await generateEmbeddings(chunks);
+          await prisma.documentChunk.createMany({
+            data: chunks.map((chunk, i) => ({
+              datasetId: dataset.id,
+              chunkIndex: i,
+              content: chunk,
+              embedding: embeddings[i] ? JSON.stringify(embeddings[i]) : null,
+            })),
+          });
+        }
+      } catch { /* embeddings optional — keyword fallback works */ }
 
       try { fs.unlinkSync(tmpFile); } catch {}
 

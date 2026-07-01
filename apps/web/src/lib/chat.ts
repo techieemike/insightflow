@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateEmbedding, findRelevantChunks, extractRelevantSnippets } from './embeddings';
 
 const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-flash-latest', 'gemini-2.0-flash-001'];
 
@@ -21,9 +22,30 @@ export async function chat(datasetId: string, question: string) {
   if (dataset.type === 'document' && dataset.content) {
     const text = dataset.content as string;
     const words = text.split(/\s+/).filter(Boolean);
-    const keywords = question.toLowerCase().split(' ').filter(w => w.length > 3);
-    const snippets = extractRelevantSnippets(text, keywords, 5);
-    context = [{ _type: 'document', content: text.slice(0, 10000), snippets, wordCount: words.length }];
+
+    let relevantChunks: string[] = [];
+    try {
+      const queryEmbedding = await generateEmbedding(question);
+      if (queryEmbedding) {
+        const chunks = await prisma.documentChunk.findMany({
+          where: { datasetId },
+          orderBy: { chunkIndex: 'asc' },
+        });
+        const parsed = chunks.map(c => ({
+          content: c.content,
+          embedding: c.embedding ? JSON.parse(c.embedding) : null,
+        })).filter(c => c.embedding);
+        relevantChunks = findRelevantChunks(parsed, queryEmbedding);
+      }
+    } catch { /* RAG fallback — use keyword approach */ }
+
+    if (!relevantChunks.length) {
+      const keywords = question.toLowerCase().split(' ').filter(w => w.length > 3);
+      const snippets = extractRelevantSnippets(text, keywords, 5);
+      relevantChunks = [text.slice(0, 5000), ...snippets];
+    }
+
+    context = [{ _type: 'document', content: relevantChunks.join('\n\n'), wordCount: words.length }];
   } else {
     const keywords = question.toLowerCase().split(' ').filter(w => w.length > 3);
     const records = await prisma.dataRecord.findMany({
@@ -269,14 +291,4 @@ export async function getHistory(datasetId: string) {
   });
 }
 
-function extractRelevantSnippets(text: string, keywords: string[], maxSnippets: number): string[] {
-  if (keywords.length === 0) return [];
-  const lower = text.toLowerCase();
-  const sentences = text.split(/[.!?]+\s*/).filter(Boolean);
-  const scored = sentences.map(s => {
-    const score = keywords.filter(kw => lower.includes(kw)).length;
-    return { sentence: s.trim(), score };
-  }).filter(s => s.score > 0)
-    .sort((a, b) => b.score - a.score);
-  return scored.slice(0, maxSnippets).map(s => s.sentence);
-}
+

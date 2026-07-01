@@ -36,6 +36,7 @@ model Dataset {
   emptyRowCount   Int      @default(0)
   insights        Json?
   records         DataRecord[]
+  documentChunks  DocumentChunk[]
   chatMessages    ChatMessage[]
 
   @@index([type])
@@ -52,6 +53,17 @@ model DataRecord {
   rowHash     String?
   @@index([datasetId])
   @@index([rowHash])
+}
+
+model DocumentChunk {
+  id         String  @id @default(cuid())
+  datasetId  String
+  dataset    Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  content    String
+  embedding  String?
+
+  @@index([datasetId])
 }
 
 model ChatMessage {
