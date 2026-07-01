@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,10 +63,16 @@ export default function LoginPage() {
           </div>
           <div>
             <label className='text-purple-200 text-sm block mb-1'>Password</label>
-            <input type='password' value={password} onChange={e => setPassword(e.target.value)}
-              className='w-full bg-white/10 border border-purple-400/30 rounded-xl px-4 py-3 text-white
-                placeholder-purple-300/50 focus:outline-none focus:border-purple-400'
-              placeholder={isRegister ? 'Alphanumeric (letters & numbers only)' : 'Your password'} />
+            <div className='relative'>
+              <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+                className='w-full bg-white/10 border border-purple-400/30 rounded-xl px-4 py-3 pr-12 text-white
+                  placeholder-purple-300/50 focus:outline-none focus:border-purple-400'
+                placeholder={isRegister ? 'Alphanumeric (letters & numbers only)' : 'Your password'} />
+              <button type='button' onClick={() => setShowPassword(!showPassword)}
+                className='absolute right-3 top-1/2 -translate-y-1/2 text-purple-300 hover:text-white transition text-lg'>
+                {showPassword ? '🙈' : '👁'}
+              </button>
+            </div>
           </div>
           <button type='submit' disabled={loading}
             className='w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-3 rounded-xl

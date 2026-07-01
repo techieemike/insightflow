@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import { useAuth } from '@/context/AuthContext';
 import ReactMarkdown from 'react-markdown';
@@ -20,18 +21,37 @@ function fmtChart(n: number): string {
 type Tab = 'upload' | 'data' | 'insights' | 'query' | 'chat';
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('insights');
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  if (!user) return <div className='min-h-screen bg-gray-950 text-white flex items-center justify-center'>Loading...</div>;
+  useEffect(() => {
+    if (!loading && !user) router.replace('/login');
+  }, [user, loading, router]);
+
+  if (loading || !user) return <div className='min-h-screen bg-gray-950 text-white flex items-center justify-center'>Loading...</div>;
 
   return (
     <div className='min-h-screen bg-gray-950 text-white flex'>
+      {/* Mobile header */}
+      <div className='md:hidden fixed top-0 left-0 right-0 z-30 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-4 h-14'>
+        <button onClick={() => setSidebarOpen(true)} className='text-gray-400 hover:text-white text-2xl' aria-label='Open menu'>☰</button>
+        <h1 className='text-lg font-bold text-purple-400'>InsightFlow AI</h1>
+        <div className='text-sm text-gray-400 truncate max-w-[100px]'>{user.name}</div>
+      </div>
+
+      {/* Backdrop */}
+      {sidebarOpen && (
+        <div className='md:hidden fixed inset-0 z-40 bg-black/60' onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <div className='w-64 bg-gray-900 border-r border-gray-800 flex flex-col'>
-        <div className='p-6 border-b border-gray-800'>
+      <div className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-gray-900 border-r border-gray-800 flex flex-col transform transition-transform duration-200 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+        <div className='p-6 border-b border-gray-800 flex items-center justify-between'>
           <h1 className='text-xl font-bold text-purple-400'>InsightFlow AI</h1>
+          <button onClick={() => setSidebarOpen(false)} className='md:hidden text-gray-400 hover:text-white text-lg' aria-label='Close menu'>✕</button>
         </div>
         <nav className='flex-1 p-4 space-y-1'>
           {[
@@ -41,7 +61,7 @@ export default function DashboardPage() {
             { id: 'query' as Tab, icon: '🔍', label: 'Query' },
             { id: 'chat' as Tab, icon: '💬', label: 'Chat' },
           ].map(item => (
-            <button key={item.id} onClick={() => setTab(item.id)}
+            <button key={item.id} onClick={() => { setTab(item.id); setSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition
                 ${tab === item.id ? 'bg-purple-700 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
               <span>{item.icon}</span>
@@ -56,7 +76,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Content */}
-      <div className='flex-1 flex flex-col overflow-hidden'>
+      <div className='flex-1 flex flex-col overflow-hidden md:pt-0 pt-14'>
         {tab === 'upload' && <UploadSection onUpload={(id) => { setSelectedDatasetId(id); setTab('insights'); }} />}
         {tab === 'data' && <DataSection onSelect={(id) => { setSelectedDatasetId(id); setTab('insights'); }} />}
         {tab === 'insights' && <InsightsSection datasetId={selectedDatasetId} onNavigate={(id) => setTab('chat')} />}
@@ -69,8 +89,8 @@ export default function DashboardPage() {
 
 function UploadSection({ onUpload }: { onUpload: (id: string) => void }) {
   return (
-    <div className='p-8 overflow-y-auto'>
-      <h2 className='text-2xl font-bold mb-6'>Upload Data</h2>
+    <div className='p-4 md:p-8 overflow-y-auto'>
+      <h2 className='text-2xl font-bold mb-4 md:mb-6'>Upload Data</h2>
       <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <UploadColumn
           title='Tabular Data'
@@ -145,7 +165,7 @@ function UploadColumn({ title, icon, description, accept, exts, onUpload: onUplo
   if (status === 'idle') {
     return (
       <div>
-        <div {...getRootProps()} className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all h-full
+        <div {...getRootProps()} className={`border-2 border-dashed rounded-2xl p-6 md:p-10 text-center cursor-pointer transition-all h-full
           ${isDragActive ? 'border-purple-300 bg-white/10' : 'border-purple-400/60 bg-white/5 hover:bg-white/10'}`}>
           <input {...getInputProps()} />
           <div className='text-5xl mb-3'>{icon}</div>
@@ -368,11 +388,11 @@ function DataSection({ onSelect }: { onSelect: (id: string) => void }) {
 
   if (selectedId && docView) {
     return (
-      <div className='p-8 overflow-y-auto'>
+      <div className='p-4 md:p-8 overflow-y-auto'>
         <div className='flex items-center gap-4 mb-6'>
           <button onClick={() => { setSelectedId(null); setDocView(null); setRecords([]); }} className='text-gray-400 hover:text-white text-sm'>&larr; Back</button>
-          <h2 className='text-2xl font-bold'>{docView.originalName}</h2>
-          <button onClick={() => onSelect(selectedId)} className='ml-auto bg-purple-700 hover:bg-purple-600 px-4 py-2 rounded-lg text-sm'>View Insights</button>
+          <h2 className='text-xl md:text-2xl font-bold truncate'>{docView.originalName}</h2>
+          <button onClick={() => onSelect(selectedId)} className='ml-auto bg-purple-700 hover:bg-purple-600 px-4 py-2 rounded-lg text-sm whitespace-nowrap'>View Insights</button>
         </div>
         {docView.insights && (
           <div className='bg-gray-800 rounded-2xl p-6 mb-6'>
@@ -405,11 +425,11 @@ function DataSection({ onSelect }: { onSelect: (id: string) => void }) {
 
   if (selectedId) {
     return (
-      <div className='p-8 overflow-y-auto'>
+      <div className='p-4 md:p-8 overflow-y-auto'>
         <div className='flex items-center gap-4 mb-6'>
           <button onClick={() => { setSelectedId(null); setRecords([]); }} className='text-gray-400 hover:text-white text-sm'>&larr; Back</button>
-          <h2 className='text-2xl font-bold'>Records</h2>
-          <button onClick={() => onSelect(selectedId)} className='ml-auto bg-purple-700 hover:bg-purple-600 px-4 py-2 rounded-lg text-sm'>View Insights</button>
+          <h2 className='text-xl md:text-2xl font-bold'>Records</h2>
+          <button onClick={() => onSelect(selectedId)} className='ml-auto bg-purple-700 hover:bg-purple-600 px-4 py-2 rounded-lg text-sm whitespace-nowrap'>View Insights</button>
         </div>
         <div className='flex gap-3 mb-4 items-end'>
           <div>
@@ -500,9 +520,9 @@ function DataSection({ onSelect }: { onSelect: (id: string) => void }) {
   }
 
   return (
-    <div className='p-8 overflow-y-auto'>
-      <div className='flex items-center justify-between mb-6'>
-        <h2 className='text-2xl font-bold'>My Data</h2>
+    <div className='p-4 md:p-8 overflow-y-auto'>
+      <div className='flex items-center justify-between mb-4 md:mb-6'>
+        <h2 className='text-xl md:text-2xl font-bold'>My Data</h2>
         <div className='relative' ref={filterRef}>
           <button onClick={() => setShowFilterDropdown(!showFilterDropdown)}
             className='bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-4 py-2 text-sm flex items-center gap-2'>
@@ -618,22 +638,22 @@ function InsightsSection({ datasetId, onNavigate }: { datasetId: string | null; 
   };
 
   if (!datasetId) return (
-    <div className='p-8 flex flex-col items-center justify-center h-full text-gray-500'>
+    <div className='p-4 md:p-8 flex flex-col items-center justify-center h-full text-gray-500'>
       <p className='text-6xl mb-4'>📊</p>
       <p className='text-xl font-semibold'>No dataset selected</p>
-      <p className='text-sm mt-2'>Upload a file or select one from My Data</p>
+      <p className='text-sm mt-2 text-center'>Upload a file or select one from My Data</p>
     </div>
   );
 
-  if (!dataset) return <div className='p-8 flex items-center justify-center text-gray-400'>Loading...</div>;
+  if (!dataset) return <div className='p-4 md:p-8 flex items-center justify-center text-gray-400'>Loading...</div>;
 
   if (dataset.type === 'document') {
     const ds = insights || {};
     return (
-      <div className='p-8 overflow-y-auto'>
-        <div className='flex items-center justify-between mb-6'>
+      <div className='p-4 md:p-8 overflow-y-auto'>
+        <div className='flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 md:mb-6'>
           <div>
-            <h2 className='text-2xl font-bold'>{dataset.originalName}</h2>
+            <h2 className='text-xl md:text-2xl font-bold'>{dataset.originalName}</h2>
             <p className='text-gray-400 text-sm'>{dataset.totalRecords?.toLocaleString()} words | Document</p>
           </div>
           <div className='flex gap-3'>
@@ -690,10 +710,10 @@ function InsightsSection({ datasetId, onNavigate }: { datasetId: string | null; 
   }
 
   return (
-    <div className='p-8 overflow-y-auto'>
-      <div className='flex items-center justify-between mb-6'>
+    <div className='p-4 md:p-8 overflow-y-auto'>
+      <div className='flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 md:mb-6'>
         <div>
-          <h2 className='text-2xl font-bold'>{dataset.originalName}</h2>
+          <h2 className='text-xl md:text-2xl font-bold'>{dataset.originalName}</h2>
           <p className='text-gray-400 text-sm'>{dataset.totalRecords?.toLocaleString()} records | {dataset.columns?.length} columns</p>
         </div>
         <div className='flex gap-3'>
@@ -1012,9 +1032,9 @@ function QuerySection(_props: { datasetId: string | null }) {
   const activeDs = allDatasets.find(d => d.originalName === activeSlug || d.slug === activeSlug);
 
   return (
-    <div className='p-8 overflow-y-auto'>
+    <div className='p-4 md:p-8 overflow-y-auto'>
       <div className='flex items-center gap-4 mb-4 flex-wrap'>
-        <h2 className='text-2xl font-bold'>SQL Query</h2>
+        <h2 className='text-xl md:text-2xl font-bold'>SQL Query</h2>
         <select value={activeSlug ?? '_all'} onChange={e => setActiveSlug(e.target.value === '_all' ? null : e.target.value)}
           className='bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white max-w-xs flex-1'>
           <option value='_all'>— All datasets —</option>
@@ -1185,10 +1205,10 @@ function ChatSection({ datasetId, onSwitchDataset }: { datasetId: string | null;
   const tabularSuggestions = ['Which category performs best?', 'Summarize this dataset.', 'What trends exist?', 'Are there any anomalies?'];
 
   if (!datasetId) return (
-    <div className='p-8 flex flex-col items-center justify-center h-full text-gray-500'>
+    <div className='p-4 md:p-8 flex flex-col items-center justify-center h-full text-gray-500'>
       <p className='text-6xl mb-4'>💬</p>
-      <p className='text-xl font-semibold'>No dataset selected</p>
-      <p className='text-sm mt-2'>Select a dataset from My Data or upload one to start chatting</p>
+      <p className='text-xl font-semibold text-center'>No dataset selected</p>
+      <p className='text-sm mt-2 text-center'>Select a dataset from My Data or upload one to start chatting</p>
     </div>
   );
 
@@ -1222,7 +1242,7 @@ function ChatSection({ datasetId, onSwitchDataset }: { datasetId: string | null;
         )}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-xl px-4 py-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-100'}`}>{msg.role === 'user' ? msg.content : <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ p: ({ children }) => <p className='mb-2 last:mb-0'>{children}</p>, ul: ({ children }) => <ul className='list-disc pl-5 mb-2 space-y-1'>{children}</ul>, ol: ({ children }) => <ol className='list-decimal pl-5 mb-2 space-y-1'>{children}</ol>, li: ({ children }) => <li>{children}</li>, strong: ({ children }) => <strong className='font-bold text-purple-300'>{children}</strong>, h1: ({ children }) => <h1 className='text-lg font-bold mb-2 mt-3'>{children}</h1>, h2: ({ children }) => <h2 className='text-base font-bold mb-2 mt-3 text-purple-400'>{children}</h2>, h3: ({ children }) => <h3 className='text-sm font-semibold mb-1 mt-2 text-purple-300'>{children}</h3>, code: ({ children }) => <code className='bg-gray-900 px-1.5 py-0.5 rounded text-xs font-mono text-purple-200'>{children}</code>, pre: ({ children }) => <pre className='bg-gray-900 rounded-xl p-3 mb-2 overflow-x-auto text-xs font-mono'>{children}</pre>, a: ({ children, href }) => <a href={href} className='text-purple-400 underline' target='_blank'>{children}</a> }}>{msg.content}</ReactMarkdown>}</div>
+            <div className={`max-w-[90%] sm:max-w-xl px-4 py-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-100'}`}>{msg.role === 'user' ? msg.content : <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ p: ({ children }) => <p className='mb-2 last:mb-0'>{children}</p>, ul: ({ children }) => <ul className='list-disc pl-5 mb-2 space-y-1'>{children}</ul>, ol: ({ children }) => <ol className='list-decimal pl-5 mb-2 space-y-1'>{children}</ol>, li: ({ children }) => <li>{children}</li>, strong: ({ children }) => <strong className='font-bold text-purple-300'>{children}</strong>, h1: ({ children }) => <h1 className='text-lg font-bold mb-2 mt-3'>{children}</h1>, h2: ({ children }) => <h2 className='text-base font-bold mb-2 mt-3 text-purple-400'>{children}</h2>, h3: ({ children }) => <h3 className='text-sm font-semibold mb-1 mt-2 text-purple-300'>{children}</h3>, code: ({ children }) => <code className='bg-gray-900 px-1.5 py-0.5 rounded text-xs font-mono text-purple-200'>{children}</code>, pre: ({ children }) => <pre className='bg-gray-900 rounded-xl p-3 mb-2 overflow-x-auto text-xs font-mono'>{children}</pre>, a: ({ children, href }) => <a href={href} className='text-purple-400 underline' target='_blank'>{children}</a> }}>{msg.content}</ReactMarkdown>}</div>
           </div>
         ))}
         {loading && <div className='flex justify-start'><div className='bg-gray-800 px-4 py-3 rounded-2xl text-sm text-gray-400 animate-pulse'>Thinking...</div></div>}

@@ -38,17 +38,17 @@ export default function DashboardPage() {
   if (!dataset) return <div className='min-h-screen bg-gray-950 text-white flex items-center justify-center'>Loading dashboard...</div>;
 
   return (
-    <div className='min-h-screen bg-gray-950 text-white p-6'>
+    <div className='min-h-screen bg-gray-950 text-white p-4 md:p-6'>
       <div className='max-w-7xl mx-auto'>
-        <div className='flex items-center justify-between mb-8'>
+        <div className='flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6 md:mb-8'>
           <div>
-            <h1 className='text-3xl font-bold text-purple-400'>InsightFlow AI</h1>
-            <p className='text-gray-400'>{dataset.originalName}</p>
+            <h1 className='text-2xl md:text-3xl font-bold text-purple-400'>InsightFlow AI</h1>
+            <p className='text-gray-400 text-sm md:text-base'>{dataset.originalName}</p>
           </div>
-          <div className='flex gap-3'>
-            <a href={`/chat/${id}`} className='bg-purple-700 hover:bg-purple-600 px-4 py-2 rounded-lg text-sm'>AI Chat</a>
-            <button onClick={() => handleExport('csv')} className='bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm'>Export CSV</button>
-            <button onClick={() => handleExport('excel')} className='bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm'>Export Excel</button>
+          <div className='flex gap-2 md:gap-3 flex-wrap'>
+            <a href={`/chat/${id}`} className='bg-purple-700 hover:bg-purple-600 px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm'>AI Chat</a>
+            <button onClick={() => handleExport('csv')} className='bg-gray-800 hover:bg-gray-700 px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm'>CSV</button>
+            <button onClick={() => handleExport('excel')} className='bg-gray-800 hover:bg-gray-700 px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm'>Excel</button>
           </div>
         </div>
 

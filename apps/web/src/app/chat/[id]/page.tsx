@@ -42,12 +42,12 @@ export default function ChatPage() {
 
   return (
     <div className='min-h-screen bg-gray-950 text-white flex flex-col'>
-      <div className='bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center gap-4'>
+      <div className='bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-4 flex items-center gap-4'>
         <a href={`/dashboard/${id}`} className='text-gray-400 hover:text-white'>← Back</a>
         <h1 className='text-lg font-bold text-purple-400'>AI Data Chat</h1>
       </div>
 
-      <div className='flex-1 overflow-y-auto p-6 space-y-4 max-w-3xl mx-auto w-full'>
+      <div className='flex-1 overflow-y-auto p-4 md:p-6 space-y-4 max-w-3xl mx-auto w-full'>
         {messages.length === 0 && (
           <div>
             <p className='text-gray-400 text-center mb-6'>Ask anything about your dataset</p>
@@ -63,7 +63,7 @@ export default function ChatPage() {
         )}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-xl px-4 py-3 rounded-2xl text-sm
+            <div className={`max-w-[90%] sm:max-w-xl px-4 py-3 rounded-2xl text-sm
               ${msg.role === 'user' ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-100'}`}>
               {msg.content}
             </div>

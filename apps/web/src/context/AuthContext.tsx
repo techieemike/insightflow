@@ -25,10 +25,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try { setUser(JSON.parse(cached)); } catch { localStorage.removeItem('user'); }
     }
     if (!token) { setLoading(false); return; }
+
+    const forceTimeout = setTimeout(() => setLoading(false), 8000);
+
     getMe().then(r => setUser(r.data)).catch(() => {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-    }).finally(() => setLoading(false));
+    }).finally(() => {
+      clearTimeout(forceTimeout);
+      setLoading(false);
+    });
   }, []);
 
   const login = async (email: string, password: string) => {
