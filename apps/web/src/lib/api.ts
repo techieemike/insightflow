@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
+  baseURL: '/api',
 });
 
 api.interceptors.request.use(config => {
@@ -47,14 +47,16 @@ export const uploadFile = (file: File, name?: string, onProgress?: (pct: number)
 export const getDatasets  = () => api.get('/datasets');
 export const getDataset   = (id: string) => api.get(`/datasets/${id}`);
 export const getRecords   = (id: string, params: any) => api.get(`/datasets/${id}/records`, { params });
-export const getInsights  = (id: string) => api.get(`/datasets/${id}/insights`);
-export const getChartData = (id: string) => api.get(`/datasets/${id}/chart-data`);
-export const sendChat     = (id: string, question: string) => api.post('/chat', { datasetId: id, question });
-export const getChatHistory = (id: string) => api.get(`/chat/${id}/history`);
+export const getInsights  = (id: string) => api.get(`/insights/${id}`);
+export const getChartData = (id: string) => api.get(`/datasets/${id}/charts`);
+export const sendChat     = (id: string, question: string) => api.post(`/chat/${id}`, { question });
+export const getChatHistory = (id: string) => api.get(`/chat/${id}`);
 export const exportCsv    = (id: string, excludeDuplicates: boolean) =>
   api.get(`/export/${id}/csv`, { params: { excludeDuplicates }, responseType: 'blob' });
 export const exportExcel  = (id: string, excludeDuplicates: boolean) =>
   api.get(`/export/${id}/excel`, { params: { excludeDuplicates }, responseType: 'blob' });
+export const exportWord   = (id: string) =>
+  api.get(`/export/${id}/word`, { responseType: 'blob' });
 export const updateRecord = (id: string, recordId: string, data: any) =>
   api.patch(`/datasets/${id}/records/${recordId}`, { data });
 export const transformDataset = (id: string, action: string, params?: any) =>

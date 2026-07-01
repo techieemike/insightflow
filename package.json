@@ -4,15 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build:api": "cd apps/api && pnpm build",
-    "build:web": "cd apps/web && pnpm build",
-    "build:all": "pnpm build:api && pnpm build:web",
-    "start:api": "cd apps/api && node dist/main",
-    "start:web": "cd apps/web && pnpm start",
-    "db:deploy": "cd apps/api && prisma migrate deploy"
+    "dev": "cd apps/web && pnpm dev",
+    "build": "cd apps/web && pnpm build",
+    "start": "cd apps/web && pnpm start",
+    "db:generate": "cd apps/web && prisma generate",
+    "db:deploy": "cd apps/web && prisma migrate deploy"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.32.1"
+  "packageManager": "pnpm@10.32.1",
+  "pnpm": {
+    "onlyBuiltDependencies": ["bcrypt", "prisma", "@prisma/client", "@prisma/engines"]
+  }
 }

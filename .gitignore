@@ -4,5 +4,6 @@ dist
 .env
 .env.local
 *.xlsx
-apps/api/dist
-apps/web/.next
+*.tsbuildinfo
+.prisma
+.vercel

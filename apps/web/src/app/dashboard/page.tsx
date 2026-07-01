@@ -2,7 +2,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useAuth } from '@/context/AuthContext';
-import { uploadFile, getDatasets, getDataset, getInsights, getChartData, getRecords, getChatHistory, sendChat, exportCsv, exportExcel, updateRecord, transformDataset, executeQuery, exportQueryResults } from '@/lib/api';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { uploadFile, getDatasets, getDataset, getInsights, getChartData, getRecords, getChatHistory, sendChat, exportCsv, exportExcel, exportWord, updateRecord, transformDataset, executeQuery, exportQueryResults } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, ScatterChart, Scatter, Legend } from 'recharts';
 import toast from 'react-hot-toast';
 
@@ -59,20 +61,62 @@ export default function DashboardPage() {
         {tab === 'data' && <DataSection onSelect={(id) => { setSelectedDatasetId(id); setTab('insights'); }} />}
         {tab === 'insights' && <InsightsSection datasetId={selectedDatasetId} onNavigate={(id) => setTab('chat')} />}
         {tab === 'query' && <QuerySection datasetId={selectedDatasetId} />}
-        {tab === 'chat' && <ChatSection datasetId={selectedDatasetId} />}
+        {tab === 'chat' && <ChatSection datasetId={selectedDatasetId} onSwitchDataset={setSelectedDatasetId} />}
       </div>
     </div>
   );
 }
 
 function UploadSection({ onUpload }: { onUpload: (id: string) => void }) {
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState<'idle'|'uploading'|'processing'|'done'>('idle');
-  const [preview, setPreview] = useState<any>(null);
-  const [datasetName, setDatasetName] = useState('');
+  return (
+    <div className='p-8 overflow-y-auto'>
+      <h2 className='text-2xl font-bold mb-6'>Upload Data</h2>
+      <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+        <UploadColumn
+          title='Tabular Data'
+          icon='📊'
+          description='Upload CSV, TXT, XLSX, or XLS files for AI-powered analysis, charts, and SQL queries.'
+          accept={{ 'text/csv': ['.csv'], 'text/plain': ['.txt'],
+            'application/vnd.ms-excel': ['.xls'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }}
+          exts={['.csv', '.txt', '.xlsx', '.xls']}
+          onUpload={onUpload}
+        />
+        <UploadColumn
+          title='Documents'
+          icon='📄'
+          description='Upload PDF or Word documents for AI summarization and Q&A.'
+          accept={{ 'application/pdf': ['.pdf'],
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] }}
+          exts={['.pdf', '.docx']}
+          onUpload={onUpload}
+        />
+      </div>
+    </div>
+  );
+}
 
-  const handleFile = useCallback(async (file: File) => {
-    if (file.size > MAX_MB * 1024 * 1024) { toast.error(`File too large. Max ${MAX_MB} MB.`); return; }
+function UploadColumn({ title, icon, description, accept, exts, onUpload: onUploadCb }:
+  { title: string; icon: string; description: string; accept: Record<string, string[]>; exts: string[]; onUpload: (id: string) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [datasetName, setDatasetName] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState<'idle'|'confirm'|'uploading'|'processing'|'done'>('idle');
+  const [preview, setPreview] = useState<any>(null);
+
+  const handleDrop = useCallback((files: File[]) => {
+    const f = files[0];
+    if (!f) return;
+    if (f.size > MAX_MB * 1024 * 1024) { toast.error(`File too large. Max ${MAX_MB} MB.`); return; }
+    setFile(f);
+    setDatasetName(f.name.replace(/\.[^.]+$/, ''));
+    setStatus('confirm');
+  }, []);
+
+  const handleUpload = useCallback(async () => {
+    if (!file) return;
+    const name = datasetName.trim();
+    if (!name) { toast.error('Please enter a dataset name.'); return; }
     setStatus('uploading'); setProgress(0);
     let simPct = 0;
     const simInterval = setInterval(() => {
@@ -80,77 +124,144 @@ function UploadSection({ onUpload }: { onUpload: (id: string) => void }) {
       setProgress(Math.round(simPct));
     }, 400);
     try {
-      const name = datasetName.trim() || undefined;
       const { data } = await uploadFile(file, name, pct => { if (pct > 0 && pct > simPct) setProgress(pct); });
       clearInterval(simInterval);
       setProgress(100); setStatus('processing');
       setPreview(data); setStatus('done');
     } catch (err: any) {
-      clearInterval(simInterval); setStatus('idle');
+      clearInterval(simInterval); setStatus('confirm');
       toast.error(err.response?.data?.message || 'Upload failed');
     }
-  }, [datasetName]);
+  }, [file, datasetName]);
+
+  const reset = useCallback(() => { setFile(null); setStatus('idle'); setPreview(null); setProgress(0); setDatasetName(''); }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: files => files[0] && handleFile(files[0]),
-    accept: { 'text/csv': ['.csv'], 'text/plain': ['.txt'], 'application/vnd.ms-excel': ['.xls'],
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
+    onDrop: handleDrop,
+    accept,
     maxFiles: 1,
   });
 
-  return (
-    <div className='p-8 overflow-y-auto'>
-      <h2 className='text-2xl font-bold mb-6'>Upload Data</h2>
-      <div className='max-w-2xl'>
-        <div className='mb-4'>
-          <label className='text-xs text-gray-500 block mb-1'>Dataset name (optional — defaults to filename)</label>
-          <input value={datasetName} onChange={e => setDatasetName(e.target.value)}
-            placeholder='e.g. revenue_2024'
-            className='bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white w-full' />
-        </div>
-        <div {...getRootProps()} className={`border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all
-          ${isDragActive ? 'border-purple-300 bg-white/10' : 'border-purple-400 bg-white/5 hover:bg-white/10'}`}>
+  if (status === 'idle') {
+    return (
+      <div>
+        <div {...getRootProps()} className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all h-full
+          ${isDragActive ? 'border-purple-300 bg-white/10' : 'border-purple-400/60 bg-white/5 hover:bg-white/10'}`}>
           <input {...getInputProps()} />
-          <div className='text-6xl mb-4'>📂</div>
-          <p className='text-white text-xl font-semibold mb-2'>{isDragActive ? 'Drop it here!' : 'Drag & drop your file here'}</p>
-          <p className='text-gray-400 mb-4'>or click to browse</p>
-          <div className='flex justify-center gap-3'>
-            {['.csv', '.txt', '.xlsx', '.xls'].map(ext => <span key={ext} className='bg-gray-800 text-gray-300 px-3 py-1 rounded-full text-sm'>{ext}</span>)}
+          <div className='text-5xl mb-3'>{icon}</div>
+          <p className='text-white text-lg font-semibold mb-1'>{isDragActive ? 'Drop it here!' : title}</p>
+          <p className='text-gray-400 text-sm mb-4'>{description}</p>
+          <div className='flex justify-center gap-2'>
+            {exts.map(ext => <span key={ext} className='bg-gray-800 text-gray-300 px-3 py-1 rounded-full text-xs'>{ext}</span>)}
           </div>
-          <p className='text-gray-500 text-sm mt-3'>Maximum file size: 25 MB</p>
+          <p className='text-gray-500 text-xs mt-3'>Maximum file size: {MAX_MB} MB</p>
         </div>
+      </div>
+    );
+  }
 
+  if (status === 'confirm' && file) {
+    return (
+      <div>
+        <div className='bg-gray-800 rounded-2xl p-6'>
+          <div className='flex items-center gap-3 mb-4'>
+            <span className='text-2xl'>{icon}</span>
+            <h3 className='text-lg font-bold'>Confirm Upload</h3>
+          </div>
+          <div className='mb-4'>
+            <p className='text-sm text-gray-400 mb-1'>File</p>
+            <p className='text-base font-semibold'>{file.name}</p>
+            <div className='bg-gray-900 rounded-lg p-3 mt-2'>
+              <div className='flex justify-between text-sm'>
+                <span className='text-gray-400'>Size</span>
+                <span className='text-white font-medium'>{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+              </div>
+              <div className='bg-gray-800 rounded-full h-1.5 mt-2'>
+                <div className='bg-purple-500 h-1.5 rounded-full' style={{ width: `${Math.min(100, (file.size / (MAX_MB * 1024 * 1024)) * 100)}%` }} />
+              </div>
+              <p className='text-xs text-gray-500 mt-1'>{Math.min(100, Math.round(file.size / (MAX_MB * 1024 * 1024) * 100))}% of {MAX_MB} MB limit</p>
+            </div>
+          </div>
+          <div className='mb-4'>
+            <label className='text-sm text-gray-300 block mb-2 font-medium'>Dataset name</label>
+            <input value={datasetName} onChange={e => setDatasetName(e.target.value)}
+              placeholder='e.g. revenue_2024'
+              className='bg-gray-900 border border-gray-600 rounded-xl px-4 py-2.5 text-base text-white w-full focus:outline-none focus:border-purple-500' />
+            <p className='text-xs text-gray-500 mt-1'>Used as the identifier in SQL queries</p>
+          </div>
+          <div className='flex gap-2'>
+            <button onClick={handleUpload}
+              className='flex-1 bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2.5 rounded-xl transition text-sm'>
+              Upload
+            </button>
+            <button onClick={reset}
+              className='bg-gray-700 hover:bg-gray-600 text-gray-300 px-5 py-2.5 rounded-xl transition text-sm'>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className='bg-gray-800 rounded-2xl p-6'>
         {status === 'uploading' && (
-          <div className='mt-6'>
+          <div className='mb-4'>
             <div className='flex justify-between text-gray-400 text-sm mb-2'><span>Uploading...</span><span>{progress}%</span></div>
             <div className='bg-gray-800 rounded-full h-2'><div className='bg-purple-400 h-2 rounded-full transition-all' style={{ width: `${progress}%` }} /></div>
           </div>
         )}
-        {status === 'processing' && <p className='text-center text-gray-400 mt-6 animate-pulse'>Processing data and generating insights...</p>}
-
-        {preview && (
-          <div className='mt-8 bg-gray-800 rounded-2xl p-6'>
-            <h3 className='text-lg font-bold mb-4'>Upload Successful</h3>
-            <div className='grid grid-cols-2 gap-4 mb-4'>
-              {[
-                { label: 'File', value: preview.fileName }, { label: 'Records', value: preview.totalRecords?.toLocaleString() },
-                { label: 'Columns', value: preview.columns?.length }, { label: 'Quality', value: `${preview.qualityScore}/100` },
-              ].map(item => (
+        {status === 'processing' && <p className='text-center text-gray-400 py-6 animate-pulse'>Processing and generating insights...</p>}
+            {preview && (
+          <div>
+            <div className='flex items-center gap-3 mb-4'>
+              <span className='text-2xl'>{icon}</span>
+              <h3 className='text-lg font-bold'>Upload Successful</h3>
+            </div>
+            <div className='grid grid-cols-2 gap-3 mb-4'>
+              {(preview.fileType === 'document'
+                ? [
+                    { label: 'File', value: preview.fileName },
+                    { label: 'Words', value: preview.totalRecords?.toLocaleString() },
+                    { label: 'Type', value: 'Document' },
+                    { label: 'Status', value: 'Ready' },
+                  ]
+                : [
+                    { label: 'File', value: preview.fileName },
+                    { label: 'Records', value: preview.totalRecords?.toLocaleString() },
+                    { label: 'Columns', value: preview.columns?.length },
+                    { label: 'Quality', value: preview.qualityScore != null ? `${preview.qualityScore}/100` : '—' },
+                  ]
+              ).map((item: any) => (
                 <div key={item.label} className='bg-gray-900 rounded-xl p-3'>
                   <div className='text-gray-500 text-xs mb-1'>{item.label}</div>
-                  <div className='font-semibold truncate'>{item.value}</div>
+                  <div className='font-semibold truncate text-sm'>{item.value}</div>
                 </div>
               ))}
             </div>
+            {preview.fileType === 'document' && preview.insights?.summary && (
+              <div className='bg-gray-900 rounded-xl p-3 mb-4'>
+                <div className='text-gray-500 text-xs mb-1'>AI Summary</div>
+                <p className='text-sm text-gray-200'>{preview.insights.summary}</p>
+              </div>
+            )}
             {preview.duplicateCount > 0 && (
               <div className='bg-yellow-900/40 border border-yellow-600 rounded-xl p-3 mb-4 text-sm'>
                 ⚠ {preview.duplicateCount} duplicate rows detected
               </div>
             )}
-            <button onClick={() => onUpload(preview.datasetId)}
-              className='w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-3 rounded-xl transition'>
-              View Insights →
-            </button>
+            <div className='flex gap-2'>
+              <button onClick={() => onUploadCb(preview.datasetId)}
+                className='flex-1 bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2.5 rounded-xl transition text-sm'>
+                View Insights →
+              </button>
+              <button onClick={reset}
+                className='bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2.5 rounded-xl transition text-sm'>
+                Upload Another
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -160,6 +271,7 @@ function UploadSection({ onUpload }: { onUpload: (id: string) => void }) {
 
 function DataSection({ onSelect }: { onSelect: (id: string) => void }) {
   const [datasets, setDatasets] = useState<any[]>([]);
+  const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [records, setRecords] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
@@ -174,8 +286,32 @@ function DataSection({ onSelect }: { onSelect: (id: string) => void }) {
   const [numericCols, setNumericCols] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
   const [editVal, setEditVal] = useState('');
+  const [docView, setDocView] = useState<any>(null);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { getDatasets().then(r => setDatasets(r.data)); }, []);
+  const fetchDatasets = () => getDatasets().then(r => setDatasets(r.data));
+  useEffect(() => { fetchDatasets(); }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setShowFilterDropdown(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filteredDatasets = filterTypes.size > 0
+    ? datasets.filter(d => filterTypes.has(d.type))
+    : datasets;
+
+  const toggleFilter = (type: string) => {
+    setFilterTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type); else next.add(type);
+      return next;
+    });
+  };
 
   const loadRecords = async (id: string, p: number) => {
     const params: any = { page: p, limit: 50, showDuplicates: false };
@@ -204,9 +340,15 @@ function DataSection({ onSelect }: { onSelect: (id: string) => void }) {
 
   const selectDataset = async (id: string) => {
     setSelectedId(id);
+    setDocView(null);
     setPage(1);
     const { data: ds } = await getDataset(id);
     setColumns(ds.columns);
+    if (ds.type === 'document') {
+      setDocView(ds);
+      setRecords([]);
+      return;
+    }
     const { data: firstPage } = await getRecords(id, { page: 1, limit: 20, showDuplicates: false });
     const numSet = new Set<string>();
     for (const col of ds.columns) {
@@ -223,6 +365,43 @@ function DataSection({ onSelect }: { onSelect: (id: string) => void }) {
     setEditingCell(null);
     loadRecords(selectedId, page);
   };
+
+  if (selectedId && docView) {
+    return (
+      <div className='p-8 overflow-y-auto'>
+        <div className='flex items-center gap-4 mb-6'>
+          <button onClick={() => { setSelectedId(null); setDocView(null); setRecords([]); }} className='text-gray-400 hover:text-white text-sm'>&larr; Back</button>
+          <h2 className='text-2xl font-bold'>{docView.originalName}</h2>
+          <button onClick={() => onSelect(selectedId)} className='ml-auto bg-purple-700 hover:bg-purple-600 px-4 py-2 rounded-lg text-sm'>View Insights</button>
+        </div>
+        {docView.insights && (
+          <div className='bg-gray-800 rounded-2xl p-6 mb-6'>
+            <h3 className='text-lg font-bold mb-3 text-purple-400'>AI Summary</h3>
+            <p className='text-gray-200 mb-3'>{docView.insights.summary}</p>
+            <div className='space-y-1'>
+              {docView.insights.keyPoints?.map((kp: string, i: number) => (
+                <div key={i} className='flex gap-2 items-start text-sm'>
+                  <span className='text-purple-400 mt-0.5'>•</span>
+                  <span className='text-gray-300'>{kp}</span>
+                </div>
+              ))}
+            </div>
+            <div className='flex gap-4 mt-4 text-xs text-gray-500'>
+              {docView.insights.wordCount != null && <span>{docView.insights.wordCount.toLocaleString()} words</span>}
+              {docView.insights.estimatedReadMinutes != null && <span>~{docView.insights.estimatedReadMinutes} min read</span>}
+            </div>
+          </div>
+        )}
+        <div className='bg-gray-800 rounded-2xl p-6'>
+          <h3 className='text-lg font-bold mb-3 text-purple-400'>Document Preview</h3>
+          <div className='bg-gray-900 rounded-xl p-4 text-sm text-gray-300 whitespace-pre-wrap max-h-[600px] overflow-y-auto font-sans leading-relaxed'>
+            {docView.contentPreview || 'No preview available.'}
+          </div>
+          <p className='text-xs text-gray-500 mt-2'>Showing first 1,000 characters</p>
+        </div>
+      </div>
+    );
+  }
 
   if (selectedId) {
     return (
@@ -322,26 +501,74 @@ function DataSection({ onSelect }: { onSelect: (id: string) => void }) {
 
   return (
     <div className='p-8 overflow-y-auto'>
-      <h2 className='text-2xl font-bold mb-6'>My Data</h2>
+      <div className='flex items-center justify-between mb-6'>
+        <h2 className='text-2xl font-bold'>My Data</h2>
+        <div className='relative' ref={filterRef}>
+          <button onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+            className='bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-4 py-2 text-sm flex items-center gap-2'>
+            <span>Filter</span>
+            {filterTypes.size > 0 && <span className='bg-purple-600 text-white text-xs rounded-full px-2 py-0.5'>{filterTypes.size}</span>}
+            <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 9l-7 7-7-7' /></svg>
+          </button>
+          {showFilterDropdown && (
+            <div className='absolute right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl py-2 w-48 z-50'>
+              <div className='px-3 py-1.5 text-xs text-gray-500 font-medium'>File type</div>
+              {[
+                { value: 'tabular', label: 'Tabular (CSV, Excel)', icon: '📊' },
+                { value: 'document', label: 'Documents (PDF, Word)', icon: '📄' },
+              ].map(opt => {
+                const selected = filterTypes.has(opt.value);
+                return (
+                  <button key={opt.value} onClick={() => toggleFilter(opt.value)}
+                    className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition ${selected ? 'bg-purple-700/30 text-purple-300' : 'text-gray-300 hover:bg-gray-700'}`}>
+                    <span className='w-4 h-4 rounded border flex items-center justify-center text-xs'
+                      style={{ borderColor: selected ? '#7C3AED' : '#6B7280', background: selected ? '#7C3AED' : 'transparent' }}>
+                      {selected && '✓'}
+                    </span>
+                    <span>{opt.icon}</span>
+                    <span>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
       {datasets.length === 0 ? (
         <div className='text-center text-gray-500 mt-20'>
           <p className='text-4xl mb-4'>📋</p>
           <p>No datasets uploaded yet</p>
           <p className='text-sm mt-2'>Go to Upload to add your first dataset</p>
         </div>
+      ) : filteredDatasets.length === 0 ? (
+        <div className='text-center text-gray-500 mt-20'>
+          <p className='text-4xl mb-4'>🔍</p>
+          <p>No datasets match the selected filter</p>
+        </div>
       ) : (
-        <div className='grid gap-4 max-w-3xl'>
-          {datasets.map(d => (
+        <div className='space-y-3 max-w-4xl'>
+          {filteredDatasets.map(d => (
             <div key={d.id} onClick={() => selectDataset(d.id)}
               className='bg-gray-800 hover:bg-gray-750 rounded-xl p-5 cursor-pointer transition border border-gray-700 hover:border-purple-500'>
               <div className='flex justify-between items-center'>
-                <div>
-                  <h3 className='font-semibold'>{d.originalName}</h3>
-                  <p className='text-sm text-gray-400 mt-1'>{d.totalRecords?.toLocaleString()} records | Quality: {d.qualityScore}/100</p>
+                <div className='flex items-center gap-3'>
+                  <span className='text-2xl'>{d.type === 'document' ? '📄' : '📊'}</span>
+                  <div>
+                    <div className='flex items-center gap-2'>
+                      <h3 className='font-semibold'>{d.originalName}</h3>
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${d.type === 'document' ? 'bg-blue-900/50 text-blue-400' : 'bg-purple-900/50 text-purple-400'}`}>
+                        {d.type === 'document' ? 'Document' : 'Tabular'}
+                      </span>
+                    </div>
+                    <p className='text-sm text-gray-400 mt-0.5'>
+                      {d.type === 'document' ? `${d.totalRecords?.toLocaleString()} words` : `${d.totalRecords?.toLocaleString()} records`}
+                      {d.type === 'tabular' && d.qualityScore != null && ` | Quality: ${d.qualityScore}/100`}
+                    </p>
+                  </div>
                 </div>
-                <div className='text-right text-xs text-gray-500'>
+                <div className='text-right text-xs text-gray-500 flex items-center gap-2'>
                   {new Date(d.uploadedAt).toLocaleDateString()}
-                  <span className={`ml-2 px-2 py-0.5 rounded ${d.status === 'READY' ? 'bg-green-900/50 text-green-400' : 'bg-yellow-900/50 text-yellow-400'}`}>{d.status}</span>
+                  <span className={`px-2 py-0.5 rounded ${d.status === 'READY' ? 'bg-green-900/50 text-green-400' : 'bg-yellow-900/50 text-yellow-400'}`}>{d.status}</span>
                 </div>
               </div>
             </div>
@@ -367,17 +594,26 @@ function InsightsSection({ datasetId, onNavigate }: { datasetId: string | null; 
   useEffect(() => {
     if (!datasetId) { setDataset(null); setInsights(null); setCharts(null); return; }
     Promise.all([getDataset(datasetId), getInsights(datasetId), getChartData(datasetId)])
-      .then(([d, i, c]) => { setDataset(d.data); setInsights(i.data); setCharts(c.data); });
+      .then(([d, i, c]) => { setDataset(d.data); setInsights(i.data); setCharts(c.data); })
+      .catch(() => {});
   }, [datasetId]);
 
-  const handleExport = async (format: 'csv' | 'excel') => {
+  const handleExport = async (format: 'csv' | 'excel' | 'word') => {
     if (!datasetId) return;
     try {
-      const fn = format === 'csv' ? exportCsv : exportExcel;
-      const { data } = await fn(datasetId, excludeDupes);
+      let data: any;
+      let ext: string;
+      if (format === 'word') {
+        const res = await exportWord(datasetId);
+        data = res.data; ext = 'docx';
+      } else {
+        const fn = format === 'csv' ? exportCsv : exportExcel;
+        const res = await fn(datasetId, excludeDupes);
+        data = res.data; ext = format === 'csv' ? 'csv' : 'xlsx';
+      }
       const url = URL.createObjectURL(new Blob([data]));
       const a = document.createElement('a'); a.href = url;
-      a.download = `insightflow-export.${format === 'csv' ? 'csv' : 'xlsx'}`; a.click();
+      a.download = `insightflow-export.${ext}`; a.click();
     } catch { toast.error('Export failed'); }
   };
 
@@ -391,6 +627,68 @@ function InsightsSection({ datasetId, onNavigate }: { datasetId: string | null; 
 
   if (!dataset) return <div className='p-8 flex items-center justify-center text-gray-400'>Loading...</div>;
 
+  if (dataset.type === 'document') {
+    const ds = insights || {};
+    return (
+      <div className='p-8 overflow-y-auto'>
+        <div className='flex items-center justify-between mb-6'>
+          <div>
+            <h2 className='text-2xl font-bold'>{dataset.originalName}</h2>
+            <p className='text-gray-400 text-sm'>{dataset.totalRecords?.toLocaleString()} words | Document</p>
+          </div>
+          <div className='flex gap-3'>
+            <button onClick={() => onNavigate(datasetId)} className='bg-purple-700 hover:bg-purple-600 px-4 py-2 rounded-lg text-sm'>AI Chat</button>
+            <button onClick={() => handleExport('word')} className='bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm'>Word</button>
+          </div>
+        </div>
+
+        <div className='grid grid-cols-2 md:grid-cols-4 gap-4 mb-6'>
+          {[
+            { label: 'Words', value: (ds.wordCount || dataset.totalRecords)?.toLocaleString() },
+            { label: 'Est. Read Time', value: ds.estimatedReadMinutes ? `~${ds.estimatedReadMinutes} min` : '—' },
+            { label: 'Status', value: dataset.status },
+            { label: 'Uploaded', value: new Date(dataset.uploadedAt).toLocaleDateString() },
+          ].map(s => (
+            <div key={s.label} className='bg-gray-800 rounded-xl p-4'>
+              <div className='text-gray-400 text-xs mb-1'>{s.label}</div>
+              <div className='text-2xl font-bold text-white'>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {ds.summary && (
+          <div className='bg-gray-800 rounded-2xl p-6 mb-6'>
+            <h3 className='text-lg font-bold mb-4 text-purple-400'>AI Summary</h3>
+            <p className='text-gray-200 leading-relaxed'>{ds.summary}</p>
+          </div>
+        )}
+
+        {ds.keyPoints && ds.keyPoints.length > 0 && (
+          <div className='bg-gray-800 rounded-2xl p-6 mb-6'>
+            <h3 className='text-lg font-bold mb-4 text-purple-400'>Key Points</h3>
+            <div className='space-y-2'>
+              {ds.keyPoints.map((kp: string, i: number) => (
+                <div key={i} className='flex gap-3 items-start'>
+                  <span className='text-purple-400 mt-1'>✦</span>
+                  <p className='text-gray-200'>{kp}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {dataset.contentPreview && (
+          <div className='bg-gray-800 rounded-2xl p-6'>
+            <h3 className='text-lg font-bold mb-4 text-purple-400'>Content Preview</h3>
+            <div className='bg-gray-900 rounded-xl p-4 text-sm text-gray-300 whitespace-pre-wrap max-h-[400px] overflow-y-auto font-sans leading-relaxed'>
+              {dataset.contentPreview}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className='p-8 overflow-y-auto'>
       <div className='flex items-center justify-between mb-6'>
@@ -403,6 +701,7 @@ function InsightsSection({ datasetId, onNavigate }: { datasetId: string | null; 
           <button onClick={() => setShowTransform(!showTransform)} className='bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm'>Transform</button>
           <button onClick={() => handleExport('csv')} className='bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm'>CSV</button>
           <button onClick={() => handleExport('excel')} className='bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm'>Excel</button>
+          <button onClick={() => handleExport('word')} className='bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm'>Word</button>
         </div>
       </div>
 
@@ -410,7 +709,7 @@ function InsightsSection({ datasetId, onNavigate }: { datasetId: string | null; 
         {[
           { label: 'Records', value: dataset.totalRecords?.toLocaleString() },
           { label: 'Columns', value: dataset.columns?.length },
-          { label: 'Quality', value: `${dataset.qualityScore}/100` },
+          { label: 'Quality', value: dataset.qualityScore != null ? `${dataset.qualityScore}/100` : '—' },
           { label: 'Duplicates', value: dataset.duplicateCount, warn: dataset.duplicateCount > 0 },
           { label: 'Missing', value: dataset.missingCount },
         ].map(s => (
@@ -848,15 +1147,22 @@ function QuerySection(_props: { datasetId: string | null }) {
   );
 }
 
-function ChatSection({ datasetId }: { datasetId: string | null }) {
+function ChatSection({ datasetId, onSwitchDataset }: { datasetId: string | null; onSwitchDataset: (id: string) => void }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [datasetInfo, setDatasetInfo] = useState<{ id: string; originalName: string; totalRecords: number; slug: string; type: string } | null>(null);
+  const [allDatasets, setAllDatasets] = useState<any[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!datasetId) { setMessages([]); return; }
+    getDatasets().then(r => setAllDatasets(r.data));
+  }, []);
+
+  useEffect(() => {
+    if (!datasetId) { setMessages([]); setDatasetInfo(null); return; }
     getChatHistory(datasetId).then(r => setMessages(r.data));
+    getDataset(datasetId).then(r => setDatasetInfo({ id: r.data.id, originalName: r.data.originalName, totalRecords: r.data.totalRecords, slug: r.data.slug, type: r.data.type })).catch(() => setDatasetInfo(null));
   }, [datasetId]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -874,6 +1180,10 @@ function ChatSection({ datasetId }: { datasetId: string | null }) {
     } finally { setLoading(false); }
   };
 
+  const isDocument = datasetInfo?.type === 'document';
+  const docSuggestions = ['Summarize this document.', 'What are the key takeaways?', 'Explain the main argument.', 'List important data points from this document.'];
+  const tabularSuggestions = ['Which category performs best?', 'Summarize this dataset.', 'What trends exist?', 'Are there any anomalies?'];
+
   if (!datasetId) return (
     <div className='p-8 flex flex-col items-center justify-center h-full text-gray-500'>
       <p className='text-6xl mb-4'>💬</p>
@@ -885,14 +1195,25 @@ function ChatSection({ datasetId }: { datasetId: string | null }) {
   return (
     <div className='flex flex-col h-full'>
       <div className='bg-gray-900 border-b border-gray-800 px-6 py-4'>
-        <h2 className='text-lg font-bold text-purple-400'>AI Data Chat</h2>
+        <div className='flex items-center justify-between gap-4'>
+          <h2 className='text-lg font-bold text-purple-400 whitespace-nowrap'>AI {isDocument ? 'Document' : 'Data'} Chat</h2>
+          <select value={datasetInfo?.id ?? ''} onChange={e => onSwitchDataset(e.target.value)}
+            className='bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white flex-1 max-w-xs'>
+            {allDatasets.map(d => (
+              <option key={d.id} value={d.id}>{d.originalName || d.slug}</option>
+            ))}
+          </select>
+        </div>
+        {datasetInfo && (
+          <p className='text-xs text-gray-500 mt-1'>{datasetInfo.originalName} &middot; {datasetInfo.totalRecords?.toLocaleString()} {isDocument ? 'words' : 'records'} &middot; <span className={isDocument ? 'text-blue-400' : 'text-purple-400'}>{isDocument ? 'Document' : 'Tabular'}</span></p>
+        )}
       </div>
       <div className='flex-1 overflow-y-auto p-6 space-y-4'>
         {messages.length === 0 && (
           <div className='text-center text-gray-500 mt-10'>
-            <p className='mb-2'>Ask anything about this dataset</p>
+            <p className='mb-2'>Ask anything about this {isDocument ? 'document' : 'dataset'}</p>
             <div className='grid grid-cols-1 gap-2 max-w-md mx-auto'>
-              {['Which category performs best?', 'Summarize this dataset.', 'What trends exist?', 'Are there any anomalies?'].map(s => (
+              {(isDocument ? docSuggestions : tabularSuggestions).map(s => (
                 <button key={s} onClick={() => setInput(s)}
                   className='text-left bg-gray-800 hover:bg-gray-700 px-4 py-3 rounded-xl text-sm text-gray-300 transition'>{s}</button>
               ))}
@@ -901,7 +1222,7 @@ function ChatSection({ datasetId }: { datasetId: string | null }) {
         )}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-xl px-4 py-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-100'}`}>{msg.content}</div>
+            <div className={`max-w-xl px-4 py-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-100'}`}>{msg.role === 'user' ? msg.content : <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ p: ({ children }) => <p className='mb-2 last:mb-0'>{children}</p>, ul: ({ children }) => <ul className='list-disc pl-5 mb-2 space-y-1'>{children}</ul>, ol: ({ children }) => <ol className='list-decimal pl-5 mb-2 space-y-1'>{children}</ol>, li: ({ children }) => <li>{children}</li>, strong: ({ children }) => <strong className='font-bold text-purple-300'>{children}</strong>, h1: ({ children }) => <h1 className='text-lg font-bold mb-2 mt-3'>{children}</h1>, h2: ({ children }) => <h2 className='text-base font-bold mb-2 mt-3 text-purple-400'>{children}</h2>, h3: ({ children }) => <h3 className='text-sm font-semibold mb-1 mt-2 text-purple-300'>{children}</h3>, code: ({ children }) => <code className='bg-gray-900 px-1.5 py-0.5 rounded text-xs font-mono text-purple-200'>{children}</code>, pre: ({ children }) => <pre className='bg-gray-900 rounded-xl p-3 mb-2 overflow-x-auto text-xs font-mono'>{children}</pre>, a: ({ children, href }) => <a href={href} className='text-purple-400 underline' target='_blank'>{children}</a> }}>{msg.content}</ReactMarkdown>}</div>
           </div>
         ))}
         {loading && <div className='flex justify-start'><div className='bg-gray-800 px-4 py-3 rounded-2xl text-sm text-gray-400 animate-pulse'>Thinking...</div></div>}

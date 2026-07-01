@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+}
+
+model Dataset {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  fileName        String
+  originalName    String
+  fileSize        Int
+  mimeType        String
+  type            String   @default("tabular")
+  content         String?
+  totalRecords    Int
+  columns         Json     @default("[]")
+  sampleRows      Json     @default("[]")
+  uploadedAt      DateTime @default(now())
+  processedAt     DateTime?
+  status          String   @default("PROCESSING")
+  qualityScore    Float?
+  duplicateCount  Int      @default(0)
+  missingCount    Int      @default(0)
+  emptyRowCount   Int      @default(0)
+  insights        Json?
+  records         DataRecord[]
+  chatMessages    ChatMessage[]
+
+  @@index([type])
+}
+
+model DataRecord {
+  id          String  @id @default(cuid())
+  datasetId   String
+  dataset     Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  rowIndex    Int
+  data        Json
+  isDuplicate Boolean @default(false)
+  isEmptyRow  Boolean @default(false)
+  rowHash     String?
+  @@index([datasetId])
+  @@index([rowHash])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  datasetId String
+  dataset   Dataset  @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+}

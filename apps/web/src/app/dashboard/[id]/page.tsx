@@ -18,10 +18,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!id) return;
-    Promise.all([getDataset(id), getInsights(id), getChartData(id)])
-      .then(([d, i, c]) => {
-        setDataset(d.data); setInsights(i.data); setCharts(c.data);
-      });
+    getDataset(id).then(d => setDataset(d.data)).catch(() => setDataset(null));
+    getInsights(id).then(i => setInsights(i.data)).catch(() => setInsights(null));
+    getChartData(id).then(c => setCharts(c.data)).catch(() => setCharts(null));
   }, [id]);
 
   const handleExport = async (format: 'csv' | 'excel') => {
@@ -82,48 +81,44 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {charts && (
+        {charts?.charts && (
           <div className='grid md:grid-cols-2 gap-6 mb-8'>
-            {charts.barData?.length > 0 && (
-              <div className='bg-gray-800 rounded-2xl p-6'>
-                <h3 className='font-bold mb-4 text-purple-300'>Top Values</h3>
-                <ResponsiveContainer width='100%' height={250}>
-                  <BarChart data={charts.barData}>
-                    <XAxis dataKey='name' tick={{ fill: '#9CA3AF', fontSize: 11 }} />
-                    <YAxis tick={{ fill: '#9CA3AF', fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: '#1F2937', border: 'none' }} />
-                    <Bar dataKey='value' fill='#7C3AED' radius={[4,4,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+            {charts.charts.map((chart: any, i: number) => (
+              <div key={i} className={`bg-gray-800 rounded-2xl p-6 ${['line','heatmap','scatter'].includes(chart.type) ? 'md:col-span-2' : ''}`}>
+                <h3 className='font-bold mb-4 text-purple-300'>{chart.title}</h3>
+                {chart.type === 'bar' && (
+                  <ResponsiveContainer width='100%' height={250}>
+                    <BarChart data={chart.data}>
+                      <XAxis dataKey='name' tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                      <Tooltip contentStyle={{ background: '#1F2937', border: 'none' }} />
+                      <Bar dataKey={chart.dataKey} fill='#7C3AED' radius={[4,4,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+                {chart.type === 'line' && (
+                  <ResponsiveContainer width='100%' height={250}>
+                    <LineChart data={chart.data}>
+                      <XAxis dataKey='name' tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                      <YAxis tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                      <Tooltip contentStyle={{ background: '#1F2937', border: 'none' }} />
+                      <Line type='monotone' dataKey='value' stroke='#7C3AED' strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+                {chart.type === 'pie' && (
+                  <ResponsiveContainer width='100%' height={250}>
+                    <PieChart>
+                      <Pie data={chart.data} dataKey='sum' nameKey='name' cx='50%' cy='50%' outerRadius={80} label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
+                        {chart.data.map((_: any, j: number) => <Cell key={j} fill={COLORS[j % COLORS.length]} />)}
+                      </Pie>
+                      <Legend />
+                      <Tooltip contentStyle={{ background: '#1F2937', border: 'none' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </div>
-            )}
-            {charts.pieData?.length > 0 && (
-              <div className='bg-gray-800 rounded-2xl p-6'>
-                <h3 className='font-bold mb-4 text-purple-300'>Distribution</h3>
-                <ResponsiveContainer width='100%' height={250}>
-                  <PieChart>
-                    <Pie data={charts.pieData} dataKey='value' nameKey='name' cx='50%' cy='50%' outerRadius={90} label>
-                      {charts.pieData.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Pie>
-                    <Legend />
-                    <Tooltip contentStyle={{ background: '#1F2937', border: 'none' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-            {charts.lineData?.length > 0 && (
-              <div className='bg-gray-800 rounded-2xl p-6 md:col-span-2'>
-                <h3 className='font-bold mb-4 text-purple-300'>Trend</h3>
-                <ResponsiveContainer width='100%' height={250}>
-                  <LineChart data={charts.lineData}>
-                    <XAxis dataKey='name' tick={{ fill: '#9CA3AF', fontSize: 11 }} />
-                    <YAxis tick={{ fill: '#9CA3AF', fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: '#1F2937', border: 'none' }} />
-                    <Line type='monotone' dataKey='value' stroke='#7C3AED' strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+            ))}
           </div>
         )}
 
