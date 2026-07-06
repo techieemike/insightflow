@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "prisma generate && next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate-guide": "node scripts/generate-guide.cjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
