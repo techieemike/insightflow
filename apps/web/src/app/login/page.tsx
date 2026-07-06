@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [accessCode, setAccessCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -26,7 +27,7 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      if (isRegister) await register(email, password, name);
+      if (isRegister) await register(email, password, name, accessCode);
       else await login(email, password);
       toast.success(isRegister ? 'Account created!' : 'Welcome back!');
       router.push('/dashboard');
@@ -74,6 +75,15 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+          {isRegister && (
+            <div>
+              <label className='text-purple-200 text-sm block mb-1'>Access Code</label>
+              <input value={accessCode} onChange={e => setAccessCode(e.target.value)}
+                className='w-full bg-white/10 border border-purple-400/30 rounded-xl px-4 py-3 text-white
+                  placeholder-purple-300/50 focus:outline-none focus:border-purple-400'
+                placeholder='Enter invite code' />
+            </div>
+          )}
           <button type='submit' disabled={loading}
             className='w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-3 rounded-xl
               disabled:opacity-50 transition'>
