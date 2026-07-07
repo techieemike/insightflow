@@ -10,6 +10,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
+export const maxDuration = 120;
+
 export async function POST(request: Request) {
   try {
     const userId = requireAuth(request);
@@ -66,46 +68,52 @@ export async function POST(request: Request) {
         },
       });
 
-      await generateInsights(dataset.id, [], [], fileType, content);
-
-      const docUpdated = await prisma.dataset.findUnique({
-        where: { id: dataset.id },
-        select: { id: true, insights: true },
-      });
-
-      await prisma.dataset.update({
-        where: { id: dataset.id },
-        data: { status: 'READY', processedAt: new Date() },
-      });
-
       try {
-        const chunks = chunkText(content);
-        if (chunks.length > 0) {
-          const embeddings = await generateEmbeddings(chunks);
-          await prisma.documentChunk.createMany({
-            data: chunks.map((chunk, i) => ({
-              datasetId: dataset.id,
-              chunkIndex: i,
-              content: chunk,
-              embedding: embeddings[i] ? JSON.stringify(embeddings[i]) : null,
-            })),
-          });
-        }
-      } catch { /* embeddings optional — keyword fallback works */ }
+        await generateInsights(dataset.id, [], [], fileType, content);
 
-      try { fs.unlinkSync(tmpFile); } catch {}
+        const docUpdated = await prisma.dataset.findUnique({
+          where: { id: dataset.id },
+          select: { id: true, insights: true },
+        });
 
-      return NextResponse.json({
-        datasetId: dataset.id,
-        fileName: fileField.name,
-        fileType: 'document',
-        totalRecords: wordCount,
-        columns: [],
-        contentPreview: content.slice(0, 500),
-        wordCount,
-        insights: docUpdated?.insights,
-        uploadedAt: dataset.uploadedAt,
-      });
+        await prisma.dataset.update({
+          where: { id: dataset.id },
+          data: { status: 'READY', processedAt: new Date() },
+        });
+
+        try {
+          const chunks = chunkText(content);
+          if (chunks.length > 0) {
+            const embeddings = await generateEmbeddings(chunks);
+            await prisma.documentChunk.createMany({
+              data: chunks.map((chunk, i) => ({
+                datasetId: dataset.id,
+                chunkIndex: i,
+                content: chunk,
+                embedding: embeddings[i] ? JSON.stringify(embeddings[i]) : null,
+              })),
+            });
+          }
+        } catch { /* embeddings optional — keyword fallback works */ }
+
+        try { fs.unlinkSync(tmpFile); } catch {}
+
+        return NextResponse.json({
+          datasetId: dataset.id,
+          fileName: fileField.name,
+          fileType: 'document',
+          totalRecords: wordCount,
+          columns: [],
+          contentPreview: content.slice(0, 500),
+          wordCount,
+          insights: docUpdated?.insights,
+          uploadedAt: dataset.uploadedAt,
+        });
+      } catch (docErr: any) {
+        await prisma.dataset.delete({ where: { id: dataset.id } }).catch(() => {});
+        try { fs.unlinkSync(tmpFile); } catch {}
+        return NextResponse.json({ message: docErr.message || 'Document processing failed' }, { status: 400 });
+      }
     }
 
     const { columns, rows } = parseFile(tmpFile, ext);

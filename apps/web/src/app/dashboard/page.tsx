@@ -5,12 +5,12 @@ import { useDropzone } from 'react-dropzone';
 import { useAuth } from '@/context/AuthContext';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { uploadFile, getDatasets, getDataset, getInsights, getChartData, getRecords, getChatHistory, sendChat, exportCsv, exportExcel, exportWord, updateRecord, transformDataset, executeQuery, exportQueryResults } from '@/lib/api';
+import { uploadFile, getDatasets, getDataset, getInsights, getChartData, getRecords, getChatHistory, sendChat, exportCsv, exportExcel, exportWord, updateRecord, transformDataset, executeQuery, exportQueryResults, deleteDataset } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, ScatterChart, Scatter, Legend } from 'recharts';
 import toast from 'react-hot-toast';
 
 const COLORS = ['#7C3AED','#8B5CF6','#A78BFA','#C4B5FD','#DDD6FE'];
-const MAX_MB = 25;
+const MAX_MB = Number(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB) || 25;
 
 function fmtChart(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
@@ -569,7 +569,7 @@ function DataSection({ onSelect }: { onSelect: (id: string) => void }) {
         <div className='space-y-3 max-w-4xl'>
           {filteredDatasets.map(d => (
             <div key={d.id} onClick={() => selectDataset(d.id)}
-              className='bg-gray-800 hover:bg-gray-750 rounded-xl p-5 cursor-pointer transition border border-gray-700 hover:border-purple-500'>
+              className='bg-gray-800 hover:bg-gray-750 rounded-xl p-5 cursor-pointer transition border border-gray-700 hover:border-purple-500 group'>
               <div className='flex justify-between items-center'>
                 <div className='flex items-center gap-3'>
                   <span className='text-2xl'>{d.type === 'document' ? '📄' : '📊'}</span>
@@ -589,6 +589,24 @@ function DataSection({ onSelect }: { onSelect: (id: string) => void }) {
                 <div className='text-right text-xs text-gray-500 flex items-center gap-2'>
                   {new Date(d.uploadedAt).toLocaleDateString()}
                   <span className={`px-2 py-0.5 rounded ${d.status === 'READY' ? 'bg-green-900/50 text-green-400' : 'bg-yellow-900/50 text-yellow-400'}`}>{d.status}</span>
+                  <button onClick={async (e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`Delete "${d.originalName}" permanently? This cannot be undone.`)) {
+                      try {
+                        await deleteDataset(d.id);
+                        toast.success('Dataset deleted');
+                        fetchDatasets();
+                      } catch {
+                        toast.error('Failed to delete dataset');
+                      }
+                    }
+                  }}
+                    className='text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition p-1'
+                    title='Delete dataset'>
+                    <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' />
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>

@@ -68,7 +68,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 export function findRelevantChunks(
   chunks: { content: string; embedding: number[] }[],
   queryEmbedding: number[],
-  topN = 5
+  topN = 15
 ): string[] {
   if (!queryEmbedding?.length || !chunks.length) return [];
   return chunks

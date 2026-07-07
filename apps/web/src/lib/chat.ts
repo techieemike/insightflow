@@ -22,6 +22,7 @@ export async function chat(datasetId: string, question: string) {
   if (dataset.type === 'document' && dataset.content) {
     const text = dataset.content as string;
     const words = text.split(/\s+/).filter(Boolean);
+    const fullText = text.slice(0, 50000);
 
     let relevantChunks: string[] = [];
     try {
@@ -41,11 +42,13 @@ export async function chat(datasetId: string, question: string) {
 
     if (!relevantChunks.length) {
       const keywords = question.toLowerCase().split(' ').filter(w => w.length > 3);
-      const snippets = extractRelevantSnippets(text, keywords, 5);
-      relevantChunks = [text.slice(0, 5000), ...snippets];
+      relevantChunks = extractRelevantSnippets(text, keywords, 10);
     }
 
-    context = [{ _type: 'document', content: relevantChunks.join('\n\n'), wordCount: words.length }];
+    const excerptText = relevantChunks.length ? `Relevant excerpts:\n${relevantChunks.join('\n\n')}` : '';
+    context = [
+      { _type: 'document', content: `Full document:\n${fullText}\n\n${excerptText}`, wordCount: words.length },
+    ];
   } else {
     const keywords = question.toLowerCase().split(' ').filter(w => w.length > 3);
     const records = await prisma.dataRecord.findMany({

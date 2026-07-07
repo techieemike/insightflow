@@ -44,8 +44,9 @@ export const uploadFile = (file: File, name?: string, onProgress?: (pct: number)
   });
 };
 
-export const getDatasets  = () => api.get('/datasets');
-export const getDataset   = (id: string) => api.get(`/datasets/${id}`);
+export const getDatasets    = () => api.get('/datasets');
+export const getDataset     = (id: string) => api.get(`/datasets/${id}`);
+export const deleteDataset  = (id: string) => api.delete(`/datasets/${id}`);
 export const getRecords   = (id: string, params: any) => api.get(`/datasets/${id}/records`, { params });
 export const getInsights  = (id: string) => api.get(`/insights/${id}`);
 export const getChartData = (id: string) => api.get(`/datasets/${id}/charts`);

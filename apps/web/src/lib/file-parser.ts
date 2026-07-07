@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 import * as mammoth from 'mammoth';
+import { PDFParse } from 'pdf-parse';
 
 export function parseFile(filePath: string, ext: string): { columns: string[]; rows: any[] } {
   if (ext === '.csv' || ext === '.txt') return parseCsv(filePath);
@@ -18,9 +19,13 @@ export async function parseDocument(filePath: string, ext: string): Promise<stri
 
 async function parsePdf(filePath: string): Promise<string> {
   const buf = fs.readFileSync(filePath);
-  const pdfParse = (await import('pdf-parse')) as any;
-  const data = await (pdfParse.default || pdfParse)(buf);
-  return data.text || '';
+  const parser = new PDFParse({ data: buf });
+  try {
+    const result = await parser.getText();
+    return result.text || '';
+  } finally {
+    await parser.destroy().catch(() => {});
+  }
 }
 
 async function parseDocx(filePath: string): Promise<string> {

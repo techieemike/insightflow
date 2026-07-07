@@ -8,7 +8,8 @@ const ALLOWED_MIMES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 const ALLOWED_EXTS = ['.csv', '.txt', '.xls', '.xlsx', '.pdf', '.docx'];
-const MAX_BYTES = 25 * 1024 * 1024;
+const MAX_MB = Number(process.env.MAX_FILE_SIZE_MB) || 25;
+const MAX_BYTES = MAX_MB * 1024 * 1024;
 
 const TABULAR_EXTS = ['.csv', '.txt', '.xls', '.xlsx'];
 const DOCUMENT_EXTS = ['.pdf', '.docx'];
@@ -16,7 +17,7 @@ const DOCUMENT_EXTS = ['.pdf', '.docx'];
 export function validateFile(file: { size: number; originalname: string; mimetype: string }) {
   if (!file) throw new Error('No file uploaded.');
   if (file.size > MAX_BYTES)
-    throw new Error(`File exceeds 25 MB limit. Got ${(file.size / 1024 / 1024).toFixed(1)} MB.`);
+    throw new Error(`File exceeds ${MAX_MB} MB limit. Got ${(file.size / 1024 / 1024).toFixed(1)} MB.`);
   const ext = file.originalname.slice(file.originalname.lastIndexOf('.')).toLowerCase();
   if (!ALLOWED_EXTS.includes(ext))
     throw new Error(`Unsupported file type: ${ext}. Allowed: .csv, .txt, .xls, .xlsx, .pdf, .docx`);

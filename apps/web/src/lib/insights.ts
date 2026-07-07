@@ -50,7 +50,7 @@ export async function generateInsights(datasetId: string, rows: any[], columns: 
 }
 
 async function generateDocumentSummary(content: string): Promise<any> {
-  const preview = content.slice(0, 8000);
+  const preview = content.slice(0, 30000);
   const words = content.split(/\s+/).filter(Boolean).length;
   const prompt = [
     'Analyze this document and return ONLY valid JSON with:',

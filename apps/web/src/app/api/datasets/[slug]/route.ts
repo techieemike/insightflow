@@ -19,3 +19,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 }
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+  try {
+    requireAuth(request);
+    const { slug } = await params;
+    const dataset = await prisma.dataset.findFirst({
+      where: { OR: [{ id: slug }, { slug }] },
+    });
+    if (!dataset) {
+      return NextResponse.json({ message: 'Dataset not found' }, { status: 404 });
+    }
+    await prisma.dataset.delete({ where: { id: dataset.id } });
+    return NextResponse.json({ message: 'Dataset deleted', id: dataset.id });
+  } catch (err: any) {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+}
