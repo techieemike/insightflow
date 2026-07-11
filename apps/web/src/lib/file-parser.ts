@@ -1,25 +1,23 @@
 import { parse } from 'csv-parse/sync';
 import * as XLSX from 'xlsx';
-import * as fs from 'fs';
 import * as crypto from 'crypto';
 import * as mammoth from 'mammoth';
-import { PDFParse } from 'pdf-parse';
 
-export function parseFile(filePath: string, ext: string): { columns: string[]; rows: any[] } {
-  if (ext === '.csv' || ext === '.txt') return parseCsv(filePath);
-  if (ext === '.xls' || ext === '.xlsx') return parseExcel(filePath);
+export function parseFile(buffer: Buffer, ext: string): { columns: string[]; rows: any[] } {
+  if (ext === '.csv' || ext === '.txt') return parseCsv(buffer);
+  if (ext === '.xls' || ext === '.xlsx') return parseExcel(buffer);
   return { columns: [], rows: [] };
 }
 
-export async function parseDocument(filePath: string, ext: string): Promise<string> {
-  if (ext === '.pdf') return parsePdf(filePath);
-  if (ext === '.docx') return parseDocx(filePath);
+export async function parseDocument(buffer: Buffer, ext: string): Promise<string> {
+  if (ext === '.pdf') return parsePdf(buffer);
+  if (ext === '.docx') return parseDocx(buffer);
   throw new Error(`Unsupported document type: ${ext}`);
 }
 
-async function parsePdf(filePath: string): Promise<string> {
-  const buf = fs.readFileSync(filePath);
-  const parser = new PDFParse({ data: buf });
+async function parsePdf(buffer: Buffer): Promise<string> {
+  const { PDFParse } = await import('pdf-parse');
+  const parser = new PDFParse({ data: buffer });
   try {
     const result = await parser.getText();
     return result.text || '';
@@ -28,20 +26,20 @@ async function parsePdf(filePath: string): Promise<string> {
   }
 }
 
-async function parseDocx(filePath: string): Promise<string> {
-  const result = await mammoth.extractRawText({ path: filePath });
+async function parseDocx(buffer: Buffer): Promise<string> {
+  const result = await mammoth.extractRawText({ buffer });
   return result.value || '';
 }
 
-function parseCsv(filePath: string) {
-  const content = fs.readFileSync(filePath, 'utf8');
+function parseCsv(buffer: Buffer) {
+  const content = buffer.toString('utf8');
   const rows = parse(content, { columns: true, skip_empty_lines: true, trim: true });
   const columns = rows.length > 0 ? Object.keys(rows[0] as Record<string, unknown>) : [];
   return { columns, rows };
 }
 
-function parseExcel(filePath: string) {
-  const workbook = XLSX.readFile(filePath);
+function parseExcel(buffer: Buffer) {
+  const workbook = XLSX.read(buffer);
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
   const columns = rows.length > 0 ? Object.keys(rows[0] as Record<string, unknown>) : [];

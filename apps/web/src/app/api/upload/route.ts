@@ -6,9 +6,6 @@ import { parseFile, parseDocument, detectDuplicates, detectEmptyRows } from '@/l
 import { analyzeQuality } from '@/lib/quality';
 import { generateInsights } from '@/lib/insights';
 import { chunkText, generateEmbeddings } from '@/lib/embeddings';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 
 export const maxDuration = 120;
 
@@ -25,9 +22,6 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await fileField.arrayBuffer());
-    const tmpDir = os.tmpdir();
-    const tmpFile = path.join(tmpDir, `${Date.now()}-${fileField.name}`);
-    fs.writeFileSync(tmpFile, buffer);
 
     const multerLikeFile = {
       size: fileField.size,
@@ -45,7 +39,7 @@ export async function POST(request: Request) {
     }
 
     if (fileType === 'document') {
-      const content = await parseDocument(tmpFile, ext);
+      const content = await parseDocument(buffer, ext);
       const wordCount = content.split(/\s+/).filter(Boolean).length;
 
       const dataset = await prisma.dataset.create({
@@ -96,8 +90,6 @@ export async function POST(request: Request) {
           }
         } catch { /* embeddings optional — keyword fallback works */ }
 
-        try { fs.unlinkSync(tmpFile); } catch {}
-
         return NextResponse.json({
           datasetId: dataset.id,
           fileName: fileField.name,
@@ -111,12 +103,11 @@ export async function POST(request: Request) {
         });
       } catch (docErr: any) {
         await prisma.dataset.delete({ where: { id: dataset.id } }).catch(() => {});
-        try { fs.unlinkSync(tmpFile); } catch {}
         return NextResponse.json({ message: docErr.message || 'Document processing failed' }, { status: 400 });
       }
     }
 
-    const { columns, rows } = parseFile(tmpFile, ext);
+    const { columns, rows } = parseFile(buffer, ext);
     const { rows: taggedRows, duplicateCount } = detectDuplicates(rows);
     const emptyRowCount = detectEmptyRows(rows);
     const quality = analyzeQuality(rows, columns);
@@ -161,8 +152,6 @@ export async function POST(request: Request) {
       where: { id: dataset.id },
       data: { status: 'READY', processedAt: new Date() },
     });
-
-    try { fs.unlinkSync(tmpFile); } catch {}
 
     return NextResponse.json({
       datasetId: dataset.id,
